@@ -1,0 +1,24 @@
+<title>notedude</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap">
+<style>
+/* Layout: a one-screen app, edge to edge. Search bar on top, note list beside the open note.
+   These tokens only paint the frame before the app mounts; the app then styles itself from
+   the @notedude/ui tokens, which these values mirror. */
+:root {
+  --nd-bg: #ffffff;
+  --nd-fg: #000000;
+  --nd-mono: 'Fira Code', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --nd-bg: #1a1a1a; --nd-fg: #e8e8e8; color-scheme: dark }
+}
+:root[data-theme="dark"] { --nd-bg: #1a1a1a; --nd-fg: #e8e8e8; color-scheme: dark }
+html, body { height: 100%; margin: 0; overflow: hidden }
+body { background: var(--nd-bg); color: var(--nd-fg); font-family: var(--nd-mono) }
+#root { height: 100% }
+.nd-boot { height: 100%; display: flex; align-items: center; justify-content: center }
+</style>
+<div id="root"><div class="nd-boot">loading...</div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>/*__NOTEDUDE_BUNDLE__*/</script>
