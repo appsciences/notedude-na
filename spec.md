@@ -7,7 +7,7 @@ a single page on claude.ai.
 
 - The same app as the web version: same screens, same shortcuts, same Markdown handling.
 - One HTML file, `dist/notedude.html`, built by `npm run build` and published with the
-  capabilities `db` and `user`.
+  `mcp` capability, declaring the `NoteDude` connector and the four tools below.
 
 ## Reuse
 
@@ -15,7 +15,8 @@ a single page on claude.ai.
 | --- | --- | --- |
 | App behaviour and keyboard handling | `notedude2/src/components/App.tsx` | Bundled unmodified |
 | Components and design tokens | `notedude2/packages/ui/src` | Bundled unmodified |
-| Storage port (`NoteRepository`) | `notedude_core` | Implemented by `src/artifact-repository.ts` |
+| Storage port (`NoteRepository`) | `notedude_core` | Implemented by `src/mcp-repository.ts` |
+| Note storage | `notedude_mcp` service | Called through the viewer's `NoteDude` connector |
 | Firestore layer | `notedude2/src/lib/notes.ts` | Replaced at build time by `src/notes.ts` |
 | Sign-in page | `notedude2/src/app/page.tsx` | Replaced by `src/main.tsx` |
 
@@ -28,23 +29,48 @@ from Next. React 18.3.1 is loaded from cdnjs, the newest release with a browser 
 
 ## Storage
 
-- Notes are documents at `data/users/<viewer id>/notedude/notes/<note id>` in the artifact's
-  database. That subtree is private to each viewer, including from the artifact's owner.
-- A document holds `content`, `pinned`, `tagPinned`, `createdAt`, `updatedAt`. `updatedAt`
-  is the writer's clock at the time of the write.
-- Writes to one note run one at a time, in the order the app issued them.
+Every note operation goes through the NoteDude MCP service (`notedude_mcp`), so the artifact
+shows the same notes as the web app. An artifact cannot open network connections itself: it
+calls the connector the viewer has added in Claude, named exactly `NoteDude`, with the
+viewer's credentials.
+
+### Tool contract
+
+| Tool | Input | Used for |
+| --- | --- | --- |
+| `list_notes` | `limit` (100), `include_archived` (true) | Loading and refreshing the list |
+| `save_note` | `id`, `content`, `pinned`, `tag_pinned`, `created_at` (ISO 8601) | Creating a note, and saving edits |
+| `update_note` | `id` plus any of `content`, `pinned`, `tag_pinned` | Pin, tag-pin, archive, task move |
+| `delete_note` | `id` | Permanently deleting a note |
+
+- `list_notes` returns `{ notes: [...], has_more? }`. Each note carries `id`, `content`,
+  `pinned`, `tag_pinned`, `created_at` and `updated_at` (ISO 8601 or Unix milliseconds).
+- `save_note` creates or fully replaces the note with that id. `update_note` changes only
+  the fields sent and fails if the note does not exist. The service stamps `updated_at`.
+- As of this writing the service has only `list_notes` (capped at 100 notes). Until the
+  three write tools exist, the artifact loads notes but every save is refused, and says so.
+
+### Behaviour
+
+- Writes to one note run one at a time, in the order the app issued them. A failed write is
+  not retried, because the service may have applied it.
+- The list is refetched after every write and every 30 seconds. Changes made elsewhere
+  appear on the next refetch, not instantly.
+- A change made here keeps showing even if a list fetched just before it arrives late. It
+  yields once a list agrees with it, or after 60 seconds.
 - A note that was created and never typed in is not stored.
-- A first-time viewer gets one welcome note.
-- These notes are separate from the notes in the web app's Firebase account. An artifact
-  cannot reach Firebase.
+- An account with no notes gets one welcome note, as in the web app.
+- When the account holds more notes than one list returns, the header says only the most
+  recent 100 are shown.
 
 ## Modes
 
-- **Synced**: the viewer is signed in and the artifact database is available. The header
-  reads "synced · private to you".
-- **Demo**: no database or no viewer identity (for example the file opened on its own).
-  The app's own demo mode is used and notes stay in that browser. The header says so.
-- A failed save replaces the header text with the reason until a later save succeeds.
+- **Synced**: the `NoteDude` connector is connected. The header reads "synced with NoteDude".
+- **Demo**: no Claude runtime, or the connector is missing or needs reconnecting. The app's
+  own demo mode is used, notes stay in that browser, and the header says how to sync.
+- A failed save or refresh replaces the header text until the next one succeeds. The wording
+  depends on the cause: reconnect the connector, add it, not allowed for this page, blocked
+  by the organization, refused by the service, or unreachable.
 
 ## Keyboard
 
@@ -65,7 +91,8 @@ from Next. React 18.3.1 is loaded from cdnjs, the newest release with a browser 
 
 ## Tests
 
-- `npm run test:unit`: storage adapter and theme logic.
+- `npm run test:unit`: connector adapter and theme logic, against an in-memory connector
+  that follows the tool contract.
 - `npm run test:e2e`: the built page in headless Chromium with a stand-in for the Claude
-  runtime, covering create, edit, pin, search, navigation, reload, theme, demo mode and
-  phone width. `npm run test:e2e:headed` opens a window.
+  runtime, covering create, edit, pin, search, navigation, reload, theme, demo mode, a
+  missing connector, a connector without write tools, and phone width. `npm run test:e2e:headed` opens a window.

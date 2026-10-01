@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { NOTES, openArtifact, storedDocs } from "./harness.ts";
+import { openArtifact, storedNotes } from "./harness.ts";
 
 const app = (page: Page) => page.getByTestId("app");
 const items = (page: Page) => page.getByTestId("list-pane").getByTestId("note-item");
@@ -14,7 +14,7 @@ async function writeNote(page: Page, text: string) {
   await idle(page);
 }
 
-test.describe("synced to the artifact database", () => {
+test.describe("synced through the NoteDude connector", () => {
   test.beforeEach(async ({ page }) => {
     await openArtifact(page);
     await idle(page);
@@ -24,15 +24,14 @@ test.describe("synced to the artifact database", () => {
 
   test("a new viewer gets the welcome note and is told the notes are synced", async ({ page }) => {
     await expect(items(page).first()).toContainText("Greetings");
-    await expect(page.getByTestId("account-header")).toContainText("synced");
+    await expect(page.getByTestId("account-header")).toContainText("synced with NoteDude");
   });
 
   test("c creates a note, Esc saves it, and it survives a reload", async ({ page }) => {
     await writeNote(page, "Groceries #home");
     await expect(items(page)).toHaveCount(2);
-    await expect.poll(async () => Object.values(await storedDocs(page)).map((d) => d.content))
+    await expect.poll(async () => Object.values(await storedNotes(page)).map((d) => d.content))
       .toContain("Groceries #home");
-    expect(Object.keys(await storedDocs(page)).every((path) => path.startsWith(`${NOTES}/`))).toBe(true);
 
     await page.reload();
     await idle(page);
@@ -45,7 +44,7 @@ test.describe("synced to the artifact database", () => {
     await page.keyboard.press("Escape");
     await idle(page);
     await expect(items(page)).toHaveCount(1);
-    expect(Object.keys(await storedDocs(page))).toHaveLength(1);
+    expect(Object.keys(await storedNotes(page))).toHaveLength(1);
   });
 
   test("j and k move the selection through the list", async ({ page }) => {
@@ -71,16 +70,16 @@ test.describe("synced to the artifact database", () => {
   test("p pins the selected note and the pin is stored", async ({ page }) => {
     await page.keyboard.press("p");
     await expect(selected(page)).toHaveAttribute("data-pinned", "true");
-    await expect.poll(async () => Object.values(await storedDocs(page))[0]?.pinned).toBe(true);
+    await expect.poll(async () => Object.values(await storedNotes(page))[0]?.pinned).toBe(true);
   });
 
-  test("Enter edits the selected note and the change is stored", async ({ page }) => {
-    await page.keyboard.press("Enter");
+  test("e edits the selected note and the change is stored", async ({ page }) => {
+    await page.keyboard.press("e");
     await expect(app(page)).toHaveAttribute("data-state", "editing");
     await page.keyboard.type(" edited");
     await page.keyboard.press("Escape");
     await idle(page);
-    await expect.poll(async () => Object.values(await storedDocs(page))[0]?.content).toContain(" edited");
+    await expect.poll(async () => Object.values(await storedNotes(page))[0]?.content).toContain(" edited");
   });
 
   test("? opens the shortcut list", async ({ page }) => {
@@ -109,13 +108,30 @@ test.describe("viewer theme", () => {
 });
 
 test("without the Claude runtime the app runs in demo mode on browser storage", async ({ page }) => {
-  await openArtifact(page, { viewer: false });
+  await openArtifact(page, { runtime: false });
   await idle(page);
   await expect(page.getByTestId("account-header")).toContainText("demo mode");
   await writeNote(page, "Local only");
   await page.reload();
   await idle(page);
   await expect(page.getByTestId("list-pane")).toContainText("Local only");
+});
+
+test("without the connector the app runs in demo mode and says how to sync", async ({ page }) => {
+  await openArtifact(page, { connected: false });
+  await idle(page);
+  await expect(page.getByTestId("account-header")).toContainText("add the NoteDude connector");
+  await writeNote(page, "Local only");
+  expect(await storedNotes(page)).toEqual({});
+});
+
+test("a connector that cannot save says so instead of failing silently", async ({ page }) => {
+  // The service as it stands today: it lists notes but has no write tools.
+  await openArtifact(page, { tools: ["list_notes"] });
+  await idle(page);
+  await writeNote(page, "Will not be saved");
+  await expect(page.getByRole("alert")).toContainText("not saved: NoteDude refused the request");
+  expect(await storedNotes(page)).toEqual({});
 });
 
 test("at phone width the list and the note share one pane", async ({ page }) => {
