@@ -1,0 +1,23 @@
+{
+  "name": "notedude-na",
+  "version": "0.1.0",
+  "private": true,
+  "description": "notedude as a Claude artifact",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test \"test/*.test.ts\"",
+    "pretest:e2e": "npm run build",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "E2E_HEADED=1 playwright test --headed"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@notedude/core": "file:../notedude_core",
+    "@playwright/test": "1.58.2",
+    "esbuild": "^0.25.12"
+  }
+}
