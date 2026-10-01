@@ -23,8 +23,14 @@ npm install
 npm run build
 ```
 
-This writes `dist/notedude.html`. Publish that file as an artifact with the capabilities
-`{"db": {}, "user": {}}`. `dist/` is not committed: it contains bundled `notedude2` source.
+This writes `dist/notedude.html`. Publish that file as an artifact with the capability
+
+```json
+{"mcp": {"servers": [{"server": "NoteDude", "tools": ["list_notes", "save_note", "update_note", "delete_note"]}]}}
+```
+
+Notes sync once the `notedude_mcp` service is added in Claude as a connector named exactly
+`NoteDude`; until then the artifact runs in demo mode. `dist/` is not committed: it contains bundled `notedude2` source.
 
 ## Test
 
